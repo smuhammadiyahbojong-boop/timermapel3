@@ -2,112 +2,132 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ujian Online - 60 Menit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistem Ujian Terproteksi</title>
     <style>
-        /* Desain Halaman */
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Segoe UI', sans-serif; 
             margin: 0; padding: 0; background-color: #f0f2f5; 
             overflow: hidden; 
-            user-select: none; 
+            user-select: none; -webkit-user-select: none;
         }
         
-        /* Header & Timer */
-        #header { position: fixed; top: 0; width: 100%; background: #ffffff; padding: 15px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; }
-        #timer-container { font-size: 28px; color: #d93025; font-weight: bold; }
-        .warning { color: #5f6368; font-size: 13px; margin-top: 5px; font-weight: normal; }
+        #header { position: fixed; top: 0; width: 100%; background: #ffffff; padding: 10px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; display: none; }
+        #timer-container { font-size: 22px; color: #d93025; font-weight: bold; }
+        .info { color: #5f6368; font-size: 12px; }
         
-        /* Frame Google Form */
-        iframe { width: 100%; height: calc(100vh - 100px); border: none; margin-top: 100px; }
+        iframe { width: 100%; height: calc(100vh - 85px); border: none; margin-top: 85px; display: none; }
         
-        /* Layar Pemblokir (Overlay) */
         #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; text-align: center; padding-top: 15%; }
-        #overlay h1 { color: #d93025; font-size: 40px; margin-bottom: 10px; }
-        #overlay p { font-size: 18px; color: #555; line-height: 1.6; padding: 0 20px; }
-
-        /* WATERMARK DIHAPUS DARI SINI */
+        #start-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 3000; text-align: center; padding-top: 10%; }
+        
+        .btn-start { background-color: #1a73e8; color: white; border: none; padding: 15px 40px; font-size: 18px; border-radius: 8px; cursor: pointer; }
     </style>
 </head>
 <body oncontextmenu="return false;">
 
+<div id="start-screen">
+    <h2>Sumatif Tengah Semester</h2>
+    <p>Gunakan mode layar penuh selama ujian.</p>
+    <button class="btn-start" onclick="startExam()">MULAI UJIAN</button>
+</div>
+
 <div id="header">
-    <div id="timer-container">Sisa Waktu: <span id="time">60:00</span></div>
-    <div class="warning">⚠️ DILARANG REFRESH HALAMAN ATAU AKSES AKAN DIBLOKIR OTOMATIS</div>
+    <div id="timer-container">Sisa Waktu: <span id="time">00:00</span></div>
+    <div id="warn-count" class="info">Pelanggaran: 0 / 3</div>
 </div>
 
 <div id="overlay">
-    <h1 id="status-title">WAKTU HABIS!</h1>
-    <p id="status-message">Sesi ujian Anda telah berakhir.<br>Jawaban yang sudah terkirim akan diproses oleh sistem.</p>
+    <h1 id="status-title">TERKUNCI</h1>
+    <p id="status-message">Akses ditutup karena terlalu banyak pelanggaran.</p>
 </div>
 
-<iframe id="googleForm" src="https://docs.google.com/forms/d/e/1FAIpQLSebrTxyo20ZiWHVLGKGv5I41bLOWcnDSWmdvSi7KnPVNR2xvg/viewform?embedded=true">Memuat…</iframe>
+<iframe id="googleForm" src="https://docs.google.com/forms/d/e/1FAIpQLScn_sJy7pQsaNmV_-BraxYSIHodJPldsd1x2uhHUllYY0VF_A/viewform?embedded=true">Memuat…</iframe>
 
 <script>
     const display = document.querySelector('#time');
-    const overlay = document.querySelector('#overlay');
+    const warnDisplay = document.querySelector('#warn-count');
     const formFrame = document.querySelector('#googleForm');
-    const statusTitle = document.querySelector('#status-title');
-    const statusMsg = document.querySelector('#status-message');
+    const startScreen = document.querySelector('#start-screen');
+    const header = document.querySelector('#header');
 
-    // 1. FITUR ANTI-REFRESH & BLOKIR (Menggunakan localStorage agar lebih ketat)
-    if (localStorage.getItem('status_ujian') === 'sedang_jalan') {
-        // Jika halaman dimuat ulang saat status masih 'sedang_jalan', ganti ke 'diblokir'
-        localStorage.setItem('status_ujian', 'diblokir');
+    // KONFIGURASI TOLERANSI
+    let violations = parseInt(localStorage.getItem('v_count')) || 0;
+    const maxViolations = 3; // Siswa boleh salah 3 kali sebelum diblokir
+
+    function updateWarnDisplay() {
+        warnDisplay.textContent = `Pelanggaran: ${violations} / ${maxViolations}`;
     }
 
-    if (localStorage.getItem('status_ujian') === 'diblokir') {
-        formFrame.remove();
-        overlay.style.display = 'block';
-        statusTitle.textContent = "AKSES DIBLOKIR!";
-        statusMsg.innerHTML = "Anda terdeteksi melakukan refresh halaman atau meninggalkan area ujian.<br>Demi integritas, Anda tidak dapat melanjutkan ujian ini.";
-    } else if (!localStorage.getItem('status_ujian')) {
-        // Setel status awal saat pertama kali buka
-        localStorage.setItem('status_ujian', 'sedang_jalan');
+    function startExam() {
+        let elem = document.documentElement;
+        if (elem.requestFullscreen) { elem.requestFullscreen(); }
+        startScreen.style.display = 'none';
+        header.style.display = 'block';
+        formFrame.style.display = 'block';
+        updateWarnDisplay();
+        startTimer();
     }
 
-    // 2. DETEKSI PINDAH TAB / MINIMIZE
-    document.addEventListener("visibilitychange", function() {
-        if (document.hidden && localStorage.getItem('status_ujian') !== 'diblokir') {
-            alert("PERINGATAN! Jangan meninggalkan halaman ujian. Klik OK untuk muat ulang dan akses akan diblokir.");
-            // Saat klik OK, halaman akan reload
-            location.reload();
+    function handleViolation(msg) {
+        if (localStorage.getItem('exam_status') === 'blocked') return;
+        
+        violations++;
+        localStorage.setItem('v_count', violations);
+        updateWarnDisplay();
+
+        if (violations >= maxViolations) {
+            blockAccess();
+        } else {
+            alert("⚠️ PERINGATAN!\n" + msg + `\nKesempatan tersisa: ${maxViolations - violations}`);
         }
+    }
+
+    function blockAccess() {
+        localStorage.setItem('exam_status', 'blocked');
+        formFrame.remove();
+        document.querySelector('#overlay').style.display = 'block';
+    }
+
+    // --- DETEKSI YANG LEBIH LONGGAR ---
+
+    // 1. Long Press (Ditingkatkan durasinya jadi 1.2 detik)
+    let touchTimeout;
+    document.addEventListener('touchstart', (e) => {
+        touchTimeout = setTimeout(() => {
+            handleViolation("Jangan menekan layar terlalu lama (Terdeteksi usaha mencari jawaban).");
+        }, 1200); 
+    }, {passive: true});
+
+    document.addEventListener('touchend', () => clearTimeout(touchTimeout));
+    document.addEventListener('touchmove', () => clearTimeout(touchTimeout));
+
+    // 2. Deteksi Keluar Aplikasi (Tab/Home)
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) handleViolation("Jangan meninggalkan halaman ujian!");
     });
 
-    // 3. BLOKIR SHORTCUT KEYBOARD
-    document.onkeydown = function(e) {
-        if (e.ctrlKey && (e.keyCode === 67 || e.keyCode === 86 || e.keyCode === 85 || e.keyCode === 83)) {
-            return false;
-        }
+    // 3. Deteksi Split Screen (Hanya jika perubahan ekstrim)
+    window.onresize = () => {
+        if (window.innerHeight < 400) handleViolation("Layar terlalu kecil! Jangan gunakan Split Screen.");
     };
 
-    // 4. LOGIKA TIMER 60 MENIT
-    var duration = 60 * 60; 
-    var countdown = setInterval(function () {
-        var minutes = parseInt(duration / 60, 10);
-        var seconds = parseInt(duration % 60, 10);
+    // Timer & Awal Load
+    if (localStorage.getItem('exam_status') === 'blocked') blockAccess();
 
-        minutes = minutes < 10 ? "0" + minutes : minutes;
-        seconds = seconds < 10 ? "0" + seconds : seconds;
-
-        display.textContent = minutes + ":" + seconds;
-
-        if (--duration < 0) {
-            clearInterval(countdown);
-            localStorage.setItem('status_ujian', 'diblokir'); // Kunci setelah waktu habis
-            formFrame.remove();
-            overlay.style.display = 'block';
-            statusTitle.textContent = "WAKTU HABIS!";
-            statusMsg.innerHTML = "Sesi ujian 60 menit Anda telah berakhir.<br>Terima kasih.";
-        }
-    }, 1000);
-
-    // 5. PERINGATAN BROWSER SEBELUM KELUAR
-    window.onbeforeunload = function() {
-        return "Peringatan: Refresh halaman akan membuat Anda kehilangan akses ujian!";
-    };
+    function startTimer() {
+        let endTime = localStorage.getItem('end_t') || (new Date().getTime() + 60*60*1000);
+        localStorage.setItem('end_t', endTime);
+        setInterval(() => {
+            let rem = endTime - new Date().getTime();
+            if (rem <= 0) blockAccess();
+            else {
+                let m = Math.floor((rem % 3600000) / 60000);
+                let s = Math.floor((rem % 60000) / 1000);
+                display.textContent = `${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
+            }
+        }, 1000);
+    }
 </script>
-
 </body>
 </html>
